@@ -230,7 +230,7 @@ module Spree
           
           #create package for active shipping
           [Package.new(weight * Spree::ActiveShipping::Config[:unit_multiplier],
-           [dimension, dimension, dimension], :units => :imperial)
+           [dimension, dimension, dimension], :units => :imperial)]
         end
 
         def get_max_weight(package)
