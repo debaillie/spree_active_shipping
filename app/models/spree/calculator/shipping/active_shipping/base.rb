@@ -213,43 +213,24 @@ module Spree
           packages
         end
 
-        # Used for calculating Dimensional Weight pricing.
-        # Override in your own extensions to compute package dimensions,
-        # or just leave this alone to keep the default behavior.
-        # Sample output: [9, 6, 3]
-        def convert_package_to_dimensions_array(package)
-          []
-        end
-
-        # Generates an array of Package objects based on the quantities and weights of the variants in the line items
+        # Generates an array of a single Package object based on the quantities and weights of the variants in the line items
+        # NOTE: spree has already split based on it's rules (ie: weight) so we get each split package, so we don't need to split further, just determine total cubic area and weight
         def packages(package)
-          units = Spree::ActiveShipping::Config[:units].to_sym
-          packages = []
-          weights = convert_package_to_weights_array(package)
-          max_weight = get_max_weight(package)
-          dimensions = convert_package_to_dimensions_array(package)
-          item_specific_packages = convert_package_to_item_packages_array(package)
 
-          if max_weight <= 0
-            packages << Package.new(weights.sum, dimensions, :units => units)
-          else
-            package_weight = 0
-            weights.each do |content_weight|
-              if package_weight + content_weight <= max_weight
-                package_weight += content_weight
-              else
-                packages << Package.new(package_weight, dimensions, :units => units)
-                package_weight = content_weight
-              end
+          weight, volume, count  = 0, 0, 0
+          package.contents.each do |pkg|
+            pkg.variant.product.product_packages.each do |pp|
+              weight += pp.weight
+              volume += (pp.length * pp.width * pp.height)
+              count += 1
             end
-            packages << Package.new(package_weight, dimensions, :units => units) if package_weight > 0
           end
-
-          item_specific_packages.each do |package|
-            packages << Package.new(package.at(0), [package.at(1), package.at(2), package.at(3)], :units => :imperial)
-          end
-
-          packages
+          dimension = volume ** (1/3.0) #cube root
+          dimension *= 1.2 if count > 1 #20% for packing materials on multiple items in a box
+          
+          #create package for active shipping
+          [Package.new(weight * Spree::ActiveShipping::Config[:unit_multiplier],
+           [dimension, dimension, dimension], :units => :imperial)
         end
 
         def get_max_weight(package)
