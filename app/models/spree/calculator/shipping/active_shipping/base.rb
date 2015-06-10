@@ -226,7 +226,10 @@ module Spree
             end
           end
           dimension = volume ** (1/3.0) #cube root
-          dimension *= 1.2 if count > 1 #20% for packing materials on multiple items in a box
+          if count > 1
+            dimension *= 1.2 #20% for packing materials on multiple items in a box
+            weight *= 1.05 #5% for weight of additional packing materials
+          end
           
           #create package for active shipping
           [Package.new(weight * Spree::ActiveShipping::Config[:unit_multiplier],
