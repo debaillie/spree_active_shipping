@@ -254,7 +254,8 @@ module Spree
           ::ActiveShipping::Location.new(:country => address.country.iso,
                        :state   => fetch_best_state_from_address(address),
                        :city    => address.city,
-                       :zip     => address.zipcode)
+                       :zip     => address.zipcode,
+                       :address_type => 'commercial')
         end
 
         def retrieve_rates_from_cache package, origin, destination
