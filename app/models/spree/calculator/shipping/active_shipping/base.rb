@@ -58,9 +58,9 @@ module Spree
                                      :state => (addr.state ? addr.state.abbr : addr.state_name),
                                      :city => addr.city,
                                      :zip => addr.zipcode)
-          timings_result = Rails.cache.fetch(cache_key(package)+"-timings") do
+          timings_result = #Rails.cache.fetch(cache_key(package)+"-timings") do
             retrieve_timings(origin, destination, packages(order))
-          end
+          #end
           raise timings_result if timings_result.kind_of?(Spree::ShippingError)
           return nil if timings_result.nil? || !timings_result.is_a?(Hash) || timings_result.empty?
           return timings_result[self.description]
@@ -121,7 +121,7 @@ module Spree
             end
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
-            Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
+            #Rails.cache.write @cache_key, error #write error to cache to prevent constant re-lookups
             raise error
           end
 
@@ -147,7 +147,7 @@ module Spree
             end
 
             error = Spree::ShippingError.new("#{I18n.t(:shipping_error)}: #{message}")
-            Rails.cache.write @cache_key+"-timings", error #write error to cache to prevent constant re-lookups
+            #Rails.cache.write @cache_key+"-timings", error #write error to cache to prevent constant re-lookups
             raise error
           end
         end
@@ -249,13 +249,13 @@ module Spree
           max_weight
         end
 
-        def cache_key(package)
-          stock_location = package.stock_location.nil? ? "" : "#{package.stock_location.id}-"
-          order = package.order
-          ship_address = package.order.ship_address
-          contents_hash = Digest::MD5.hexdigest(package.contents.map {|content_item| content_item.variant.id.to_s + "_" + content_item.quantity.to_s }.join("|"))
-          @cache_key = "#{stock_location}#{carrier.name}-#{order.number}-#{ship_address.country.iso}-#{fetch_best_state_from_address(ship_address)}-#{ship_address.city}-#{ship_address.zipcode}-#{contents_hash}-#{I18n.locale}".gsub(" ","")
-        end
+        #def cache_key(package)
+        #  stock_location = package.stock_location.nil? ? "" : "#{package.stock_location.id}-"
+        #  order = package.order
+        #  ship_address = package.order.ship_address
+        #  contents_hash = Digest::MD5.hexdigest(package.contents.map {|content_item| content_item.variant.id.to_s + "_" + content_item.quantity.to_s }.join("|"))
+        #  @cache_key = "#{stock_location}#{carrier.name}-#{order.number}-#{ship_address.country.iso}-#{fetch_best_state_from_address(ship_address)}-#{ship_address.city}-#{ship_address.zipcode}-#{contents_hash}-#{I18n.locale}".gsub(" ","")
+        #end
 
         def fetch_best_state_from_address address
           address.state ? address.state.abbr : address.state_name
@@ -270,14 +270,14 @@ module Spree
         end
 
         def retrieve_rates_from_cache package, origin, destination
-          Rails.cache.fetch(cache_key(package)) do
+          #Rails.cache.fetch(cache_key(package)) do
             shipment_packages = packages(package)
             if shipment_packages.empty?
               {}
             else
               retrieve_rates(origin, destination, shipment_packages)
             end
-          end
+          #end
         end
       end
     end
