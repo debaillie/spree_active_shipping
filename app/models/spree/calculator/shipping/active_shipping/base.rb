@@ -213,27 +213,48 @@ module Spree
           packages
         end
 
-        # Generates an array of a single Package object based on the quantities and weights of the variants in the line items
-        # NOTE: spree has already split based on it's rules (ie: weight) so we get each split package, so we don't need to split further, just determine total cubic area and weight
+        MY_VOLUME_OVERAGE = 1.2
+        MY_WEIGHT_OVERAGE = 1.05
+        MY_DIMENSION_MULTIPLIER = 8.0
+        MY_WEIGHT_MULTIPLIER = 16.0
+        #helper for packages method
+        def package_it(weight, volume, count)
+          dimension = volume**(1/3.0) #cube root
+          dimension /= MY_DIMENSION_MULTIPLIER #convert to inches
+          if count > 1
+            dimension *= MY_VOLUME_OVERAGE #% for packing materials
+            weight *= MY_WEIGHT_OVERAGE #% for packing materials
+          end
+          dimension = dimension.ceil #round up
+          weight = weight.ceil #round up
+          Package.new(weight, [dimension, dimension, dimension], :units => :imperial)
+        end
+
+        # Generates an array of packages to be estimated by merchant, we are doing the splitting here because spree splitting causes too many other issues related to updating the backend, actually trying to pack according to the splitter, etc... we don't want a precise answer that isn't realistic, we want a mostly precise answer that a human can figure out how to pack
+        MY_WEIGHT_THRESHOLD = (140*MY_WEIGHT_MULTIPLIER).to_f / MY_WEIGHT_OVERAGE #140 lbs max for fedex ground, we store product packages in ounces, we add XX% for packing materials
+        MY_VOLUME_THRESHOLD = ((33*MY_DIMENSION_MULTIPLIER)**3).to_f / MY_VOLUME_OVERAGE #max cubic size is 33", we store product packages in 1/8" increments, we add XX% for packing materials
         def packages(package)
 
-          weight, volume, count  = 0, 0, 0
+          packages = []
+          weight, volume, count = 0, 0, 0
+
           package.contents.each do |pkg|
             pkg.variant.product.product_packages.each do |pp|
+              pp_volume = (pp.length * pp.width * pp.height)
+              if weight + pp.weight > MY_WEIGHT_THRESHOLD or volume + pp_volume > MY_VOLUME_THRESHOLD
+                packages << package_it(weight, volume, count)
+                weight, volume, count = 0, 0, 0
+              end
               weight += pp.weight
-              volume += (pp.length * pp.width * pp.height)
+              volume += pp_volume
               count += 1
             end
           end
-          dimension = volume ** (1/3.0) #cube root
-          if count > 1
-            dimension *= 1.2 #20% for packing materials on multiple items in a box
-            weight *= 1.05 #5% for weight of additional packing materials
-          end
-          
-          #create package for active shipping
-          [Package.new(weight * Spree::ActiveShipping::Config[:unit_multiplier],
-           [dimension, dimension, dimension], :units => :imperial)]
+
+          packages << package_it(weight, volume, count) if weight > 0 or volume > 0
+
+          packages
+
         end
 
         def get_max_weight(package)
