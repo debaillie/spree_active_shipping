@@ -11,6 +11,16 @@ module Spree
       class Base < ShippingCalculator
         include ActiveMerchant::Shipping
 
+        FEDEX_PICKUP_CHARGE ||= 400
+        MY_VOLUME_OVERAGE ||= 1.16 #16%
+        MY_WEIGHT_OVERAGE ||= 1.125 #12.5%
+        MY_DIMENSION_MULTIPLIER ||= 8.0
+        MY_WEIGHT_MULTIPLIER ||= 16.0
+        BOX_SIZES ||= [[13.25,7.25,7.25], [14,14,14], [26,18,10]] #note, largest must be last
+        BOX_VOLUMES ||= BOX_SIZES.map{|x| ((x[0]*x[1]*x[2]).to_f * (MY_DIMENSION_MULTIPLIER**3)) / MY_VOLUME_OVERAGE}
+        MY_WEIGHT_THRESHOLD ||= (140*MY_WEIGHT_MULTIPLIER).to_f / MY_WEIGHT_OVERAGE #140 lbs max for fedex ground, we store product packages in ounces, we add XX% for packing materials
+        MY_VOLUME_THRESHOLD ||= BOX_VOLUMES.last
+
         def self.service_name
           self.description
         end
@@ -100,7 +110,7 @@ module Spree
             # turn this beastly array into a nice little hash
             rates = response.rates.collect do |rate|
               service_name = rate.service_name.encode("UTF-8")
-              [CGI.unescapeHTML(service_name), rate.price]
+              [CGI.unescapeHTML(service_name), rate.price + (service_name == 'FedEx 2 Day' ? FEDEX_PICKUP_CHARGE : 0)]
             end
             rate_hash = Hash[*rates.flatten]
             return rate_hash
@@ -213,26 +223,27 @@ module Spree
           packages
         end
 
-        MY_VOLUME_OVERAGE = 1.2
-        MY_WEIGHT_OVERAGE = 1.05
-        MY_DIMENSION_MULTIPLIER = 8.0
-        MY_WEIGHT_MULTIPLIER = 16.0
         #helper for packages method
         def package_it(weight, volume, count)
-          dimension = volume**(1/3.0) #cube root
-          dimension /= MY_DIMENSION_MULTIPLIER #convert to inches
+
           if count > 1
-            dimension *= MY_VOLUME_OVERAGE #% for packing materials
+            volume *= MY_VOLUME_OVERAGE #% for packing materials
             weight *= MY_WEIGHT_OVERAGE #% for packing materials
           end
-          dimension = dimension.ceil #round up
           weight = weight.ceil #round up
-          Package.new(weight, [dimension, dimension, dimension], :units => :imperial)
+          the_box = nil
+          BOX_VOLUMES.each_with_index do |box, index|
+            if box >= volume
+              the_box = BOX_SIZES[index]
+              break
+            else
+            end
+          end
+          the_box = [32,32,32] if the_box.nil?
+          Package.new(weight, [the_box[0], the_box[1], the_box[2]], :units => :imperial)
         end
 
         # Generates an array of packages to be estimated by merchant, we are doing the splitting here because spree splitting causes too many other issues related to updating the backend, actually trying to pack according to the splitter, etc... we don't want a precise answer that isn't realistic, we want a mostly precise answer that a human can figure out how to pack
-        MY_WEIGHT_THRESHOLD = (140*MY_WEIGHT_MULTIPLIER).to_f / MY_WEIGHT_OVERAGE #140 lbs max for fedex ground, we store product packages in ounces, we add XX% for packing materials
-        MY_VOLUME_THRESHOLD = ((33*MY_DIMENSION_MULTIPLIER)**3).to_f / MY_VOLUME_OVERAGE #max cubic size is 33", we store product packages in 1/8" increments, we add XX% for packing materials
         def packages(package)
 
           packages = []
